@@ -12,6 +12,34 @@ const RAILS = [
 ];
 const TARGETS_PER_RAIL = 3;
 
+export type Mode = 'easy' | 'hard';
+export const MODES: readonly Mode[] = ['easy', 'hard'];
+/** How much faster than its rail's speed each target moves in each mode. */
+export const SPEED_MULTIPLIER: Record<Mode, number> = { easy: 1, hard: 2 };
+
+/** The Easy and Hard buttons on the choice screen, in canvas pixels. */
+const MODE_BUTTON = { width: 180, height: 56, gap: 40, y: HEIGHT / 2 + 10 };
+
+export function modeButton(mode: Mode) {
+  const total = MODES.length * MODE_BUTTON.width + (MODES.length - 1) * MODE_BUTTON.gap;
+  const left = (WIDTH - total) / 2;
+  return {
+    x: left + MODES.indexOf(mode) * (MODE_BUTTON.width + MODE_BUTTON.gap),
+    y: MODE_BUTTON.y,
+    width: MODE_BUTTON.width,
+    height: MODE_BUTTON.height,
+  };
+}
+
+/** The mode whose button is under a point, or null for a click beside them. */
+export function modeAt(x: number, y: number): Mode | null {
+  for (const mode of MODES) {
+    const b = modeButton(mode);
+    if (x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height) return mode;
+  }
+  return null;
+}
+
 export interface Target {
   x: number;
   y: number;
@@ -42,14 +70,14 @@ export interface WaterCannonState {
   phase: 'playing' | 'over';
 }
 
-export function createState(): WaterCannonState {
+export function createState(mode: Mode = 'easy'): WaterCannonState {
   const spacing = WIDTH / TARGETS_PER_RAIL;
   const targets = RAILS.flatMap((rail) =>
     Array.from({ length: TARGETS_PER_RAIL }, (_, i) => ({
       x: spacing * i + spacing / 2,
       y: rail.y,
       radius: rail.radius,
-      speed: rail.speed,
+      speed: rail.speed * SPEED_MULTIPLIER[mode],
     })),
   );
   return { targets, shots: [], splashes: [], tank: TANK_SIZE, score: 0, phase: 'playing' };
@@ -114,6 +142,7 @@ function draw(
   ctx: CanvasRenderingContext2D,
   state: WaterCannonState,
   aim: { x: number; y: number },
+  choosing: boolean,
 ) {
   const { colors } = theme;
 
@@ -184,7 +213,7 @@ function draw(
   ctx.textAlign = 'right';
   ctx.fillText(`Water ${state.tank}/${TANK_SIZE}`, WIDTH - 16, HEIGHT - 20);
 
-  if (state.phase === 'over') {
+  if (state.phase === 'over' && !choosing) {
     ctx.fillStyle = colors.background;
     ctx.globalAlpha = 0.8;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
@@ -196,6 +225,40 @@ function draw(
     ctx.fillStyle = colors.text;
     ctx.font = canvasFont('body');
     ctx.fillText('Click to play again', WIDTH / 2, HEIGHT / 2 + 40);
+  }
+
+  if (choosing) drawModeChoice(ctx);
+}
+
+function drawModeChoice(ctx: CanvasRenderingContext2D) {
+  const { colors } = theme;
+  ctx.fillStyle = colors.background;
+  ctx.globalAlpha = 0.8;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = colors.accent;
+  ctx.font = canvasFont('title', 'bold');
+  ctx.fillText('Pick a mode', WIDTH / 2, HEIGHT / 2 - 50);
+  ctx.fillStyle = colors.muted;
+  ctx.font = canvasFont('body');
+  ctx.fillText('Hard targets move twice as fast and score more', WIDTH / 2, HEIGHT / 2 - 16);
+
+  for (const mode of MODES) {
+    const b = modeButton(mode);
+    ctx.fillStyle = colors.surface;
+    ctx.beginPath();
+    ctx.roundRect(b.x, b.y, b.width, b.height, theme.radius);
+    ctx.fill();
+    ctx.strokeStyle = colors.accent;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = colors.text;
+    ctx.font = canvasFont('body', 'bold');
+    ctx.textBaseline = 'middle';
+    ctx.fillText(mode === 'easy' ? 'Easy' : 'Hard', b.x + b.width / 2, b.y + b.height / 2);
+    ctx.textBaseline = 'alphabetic';
   }
 }
 
@@ -212,6 +275,8 @@ export const waterCannon: CarnivalGame = {
 
     let state = createState();
     let scoreRecorded = false;
+    // Before each round the player picks Easy or Hard on the choice screen.
+    let choosing = true;
     const aim = { x: WIDTH / 2, y: 0 };
 
     const toCanvas = (event: PointerEvent) => {
@@ -224,9 +289,15 @@ export const waterCannon: CarnivalGame = {
     const onMove = (event: PointerEvent) => Object.assign(aim, toCanvas(event));
     const onDown = (event: PointerEvent) => {
       Object.assign(aim, toCanvas(event));
-      if (state.phase === 'over') {
-        state = createState();
-        scoreRecorded = false;
+      if (choosing) {
+        const mode = modeAt(aim.x, aim.y);
+        if (mode) {
+          state = createState(mode);
+          scoreRecorded = false;
+          choosing = false;
+        }
+      } else if (state.phase === 'over') {
+        choosing = true;
       } else {
         fire(state, aim.x, aim.y);
       }
@@ -240,12 +311,12 @@ export const waterCannon: CarnivalGame = {
       // Cap the step so a background tab doesn't teleport everything.
       const dt = Math.min((time - last) / 1000, 0.05);
       last = time;
-      step(state, dt);
+      if (!choosing) step(state, dt);
       if (state.phase === 'over' && !scoreRecorded) {
         recordScore(waterCannon.id, state.score);
         scoreRecorded = true;
       }
-      draw(ctx, state, aim);
+      draw(ctx, state, aim, choosing);
       frame = requestAnimationFrame(loop);
     };
     frame = requestAnimationFrame(loop);
