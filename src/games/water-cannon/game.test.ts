@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   CANNON,
+  SPEED_MULTIPLIER,
   TANK_SIZE,
   createState,
   fire,
   isHit,
+  modeAt,
+  modeButton,
   scoreForHit,
   step,
   type Target,
@@ -76,5 +79,44 @@ describe('water cannon', () => {
     const slow = scoreForHit({ ...target, speed: 60 });
     const fast = scoreForHit({ ...target, speed: -180 });
     expect(Math.max(fast, slow)).toBeGreaterThanOrEqual(slow);
+  });
+
+  it('keeps the rail speeds on Easy', () => {
+    const speeds = createState('easy').targets.map((t) => t.speed);
+    expect(new Set(speeds)).toEqual(new Set([180, -120, 60]));
+    expect(createState().targets).toEqual(createState('easy').targets);
+  });
+
+  it('moves every target twice as fast on Hard, in the same direction', () => {
+    expect(SPEED_MULTIPLIER.hard).toBe(2);
+    const easy = createState('easy').targets;
+    const hard = createState('hard').targets;
+    expect(hard).toHaveLength(easy.length);
+    hard.forEach((t, i) => {
+      expect(t.speed).toBe(easy[i].speed * 2);
+      expect(Math.sign(t.speed)).toBe(Math.sign(easy[i].speed));
+      expect({ ...t, speed: 0 }).toEqual({ ...easy[i], speed: 0 });
+    });
+  });
+
+  it('scores the same hit higher on Hard than on Easy', () => {
+    const play = (mode: 'easy' | 'hard') => {
+      const state = createState(mode);
+      const t = state.targets[0];
+      state.targets = [t];
+      state.shots = [{ x: t.x, y: t.y, vx: 0, vy: 0 }];
+      step(state, 0);
+      return state.score;
+    };
+    expect(play('easy')).toBeGreaterThan(0);
+    expect(play('hard')).toBeGreaterThan(play('easy'));
+  });
+
+  it('finds the mode button under a click, and nothing beside them', () => {
+    for (const mode of ['easy', 'hard'] as const) {
+      const b = modeButton(mode);
+      expect(modeAt(b.x + b.width / 2, b.y + b.height / 2)).toBe(mode);
+    }
+    expect(modeAt(0, 0)).toBeNull();
   });
 });
