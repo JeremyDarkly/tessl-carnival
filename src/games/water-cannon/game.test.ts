@@ -10,6 +10,7 @@ import {
   modeButton,
   scoreForHit,
   step,
+  toggleMinnesota,
   type Target,
 } from './game';
 
@@ -118,5 +119,41 @@ describe('water cannon', () => {
       expect(modeAt(b.x + b.width / 2, b.y + b.height / 2)).toBe(mode);
     }
     expect(modeAt(0, 0)).toBeNull();
+  });
+
+  it('starts every new game with Minnesota Mode off', () => {
+    expect(createState().minnesota).toBe(false);
+    expect(createState('hard').minnesota).toBe(false);
+  });
+
+  it('flips Minnesota Mode on and back off', () => {
+    const state = createState();
+    toggleMinnesota(state);
+    expect(state.minnesota).toBe(true);
+    toggleMinnesota(state);
+    expect(state.minnesota).toBe(false);
+  });
+
+  it('scores and moves the same with Minnesota Mode on, in both modes', () => {
+    for (const mode of ['easy', 'hard'] as const) {
+      const play = (minnesota: boolean) => {
+        const state = createState(mode);
+        if (minnesota) toggleMinnesota(state);
+        for (const t of state.targets.slice(0, 3)) fire(state, t.x, t.y);
+        for (let i = 0; i < 60; i++) step(state, 1 / 60);
+        return { ...state, minnesota: undefined };
+      };
+      expect(play(false).score).toBeGreaterThan(0);
+      expect(play(true)).toEqual(play(false));
+    }
+  });
+
+  it('counts the same hits with Minnesota Mode on', () => {
+    const state = createState();
+    toggleMinnesota(state);
+    state.targets = [{ ...target }];
+    state.shots = [{ x: target.x, y: target.y + 5, vx: 0, vy: 0 }];
+    step(state, 0);
+    expect(state.score).toBe(scoreForHit(target));
   });
 });

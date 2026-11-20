@@ -30,6 +30,15 @@ modes save to the same score board. The multipliers are `SPEED_MULTIPLIER` in
 
 Your final score is saved to the carnival's score board when the game ends.
 
+## Minnesota Mode
+
+Press **M** at any time, in a round or on the mode and game over screens, to
+switch Minnesota Mode on or off. The targets turn into orange-yellow wedges of
+cheese with holes in them. The top left corner shows whether it is on. It only
+changes how the targets look: hits, speeds and scoring are the same, and it works
+on Easy and Hard. Every new game starts with it off, and it stays as you left it
+from one round to the next until you leave the booth.
+
 ## Options
 
 Add `?shots=25` to the page URL to change the size of the tank, for example
@@ -37,6 +46,7 @@ Add `?shots=25` to the page URL to change the size of the tank, for example
 
 ## Files
 
-- `game.ts`: the game logic (`createState`, `fire`, `step`, `scoreForHit`) and the
+- `game.ts`: the game logic (`createState`, `fire`, `step`, `scoreForHit`,
+  `toggleMinnesota`) and the
   `waterCannon` entry, the default export the midway finds.
 - `game.test.ts`: tests for the game logic.

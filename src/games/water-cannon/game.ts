@@ -68,6 +68,8 @@ export interface WaterCannonState {
   tank: number;
   score: number;
   phase: 'playing' | 'over';
+  /** Minnesota Mode draws the targets as wedges of cheese. It only changes the look. */
+  minnesota: boolean;
 }
 
 export function createState(mode: Mode = 'easy'): WaterCannonState {
@@ -80,7 +82,20 @@ export function createState(mode: Mode = 'easy'): WaterCannonState {
       speed: rail.speed * SPEED_MULTIPLIER[mode],
     })),
   );
-  return { targets, shots: [], splashes: [], tank: TANK_SIZE, score: 0, phase: 'playing' };
+  return {
+    targets,
+    shots: [],
+    splashes: [],
+    tank: TANK_SIZE,
+    score: 0,
+    phase: 'playing',
+    minnesota: false,
+  };
+}
+
+/** Switches Minnesota Mode on or off. */
+export function toggleMinnesota(state: WaterCannonState): void {
+  state.minnesota = !state.minnesota;
 }
 
 /** Faster targets are worth more: 10 points per 60 px/s, rounded up. */
@@ -162,6 +177,10 @@ function draw(
   }
 
   for (const target of state.targets) {
+    if (state.minnesota) {
+      drawCheese(ctx, target);
+      continue;
+    }
     ctx.fillStyle = colors.stripeB;
     ctx.beginPath();
     ctx.arc(target.x, target.y, target.radius, 0, Math.PI * 2);
@@ -212,6 +231,10 @@ function draw(
   ctx.fillText(`Score ${state.score}`, 16, HEIGHT - 20);
   ctx.textAlign = 'right';
   ctx.fillText(`Water ${state.tank}/${TANK_SIZE}`, WIDTH - 16, HEIGHT - 20);
+  ctx.fillStyle = colors.muted;
+  ctx.font = canvasFont('small');
+  ctx.textAlign = 'left';
+  ctx.fillText(`Minnesota Mode: ${state.minnesota ? 'on' : 'off'} (M)`, 16, 60);
 
   if (state.phase === 'over' && !choosing) {
     ctx.fillStyle = colors.background;
@@ -228,6 +251,28 @@ function draw(
   }
 
   if (choosing) drawModeChoice(ctx);
+}
+
+/** A wedge of cheese with holes, sized from the target's radius. */
+function drawCheese(ctx: CanvasRenderingContext2D, target: Target) {
+  const { x, y, radius: r } = target;
+  ctx.fillStyle = theme.colors.accent;
+  ctx.beginPath();
+  ctx.moveTo(x - r, y + r * 0.7);
+  ctx.lineTo(x + r, y + r * 0.7);
+  ctx.lineTo(x + r, y - r * 0.7);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = theme.colors.wood;
+  for (const [hx, hy, hr] of [
+    [0.35, 0.35, 0.16],
+    [0.7, -0.1, 0.12],
+    [0.05, 0.55, 0.09],
+  ]) {
+    ctx.beginPath();
+    ctx.arc(x + hx * r, y + hy * r, hr * r, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function drawModeChoice(ctx: CanvasRenderingContext2D) {
@@ -292,7 +337,8 @@ export const waterCannon: CarnivalGame = {
       if (choosing) {
         const mode = modeAt(aim.x, aim.y);
         if (mode) {
-          state = createState(mode);
+          // Minnesota Mode carries over from the choice screen and the last round.
+          state = { ...createState(mode), minnesota: state.minnesota };
           scoreRecorded = false;
           choosing = false;
         }
@@ -302,8 +348,12 @@ export const waterCannon: CarnivalGame = {
         fire(state, aim.x, aim.y);
       }
     };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'm' || event.key === 'M') toggleMinnesota(state);
+    };
     canvas.addEventListener('pointermove', onMove);
     canvas.addEventListener('pointerdown', onDown);
+    window.addEventListener('keydown', onKey);
 
     let frame = 0;
     let last = performance.now();
@@ -325,6 +375,7 @@ export const waterCannon: CarnivalGame = {
       cancelAnimationFrame(frame);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('keydown', onKey);
     };
   },
 };
